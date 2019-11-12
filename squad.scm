@@ -4,7 +4,7 @@
 
 (use-module '{texttools webtools})
 (use-module '{logger varconfig})
-(use-module '{flexdb})
+(use-module '{knodb})
 (use-module '{ofsm chopper/graph chopper/features chopper/search})
 
 (define-init %loglevel %notice%)

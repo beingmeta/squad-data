@@ -28,7 +28,7 @@
 (use-module '{chopper/graph chopper/features})
 (use-module '{chopper/squad})
 (use-module '{engine fifo})
-(use-module '{flexdb})
+(use-module '{knodb})
 
 (config! 'tagger:xterms '{concepts* sensecat})
 
@@ -211,5 +211,5 @@
   (optimize! '{logger varconfig logctl ellipsize optimize})
   (optimize! '{chopper/graph chopper/features})
   (optimize! '{engine fifo})
-  (optimize! '{flexdb})
+  (optimize! '{knodb})
   (optimize!))

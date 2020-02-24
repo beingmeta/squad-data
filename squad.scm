@@ -1,11 +1,10 @@
 ;;; -*- Mode: Scheme; Character-encoding: utf-8; -*-
 
-(in-module 'chopper/squad)
+(in-module 'squad)
 
 (use-module '{texttools webtools})
 (use-module '{logger varconfig})
 (use-module '{knodb})
-(use-module '{ofsm chopper/graph chopper/features chopper/search})
 
 (define-init %loglevel %notice%)
 
@@ -21,29 +20,29 @@
 
 (define-init squad.pool
   (pool/ref (mkpath squad-loc "squad.pool")
-	    #[type bigpool base @5COAD/0 capacity #1mib
+	    #[type knopool base @5COAD/0 capacity #1mib
 	      create #t]))
 (define-init squad.linkups
   (pool/ref (mkpath squad-loc "linkups.pool")
 	    #[adjunct linkup
-	      type bigpool base @5COAD/0 capacity #1mib
+	      type knopool base @5COAD/0 capacity #1mib
 	      create #t]))
 (adjunct! squad.pool 'linkup squad.linkups)
 
 (define-init squad.index
-  (db/ref (mkpath squad-loc "squad.index")
-	  #[type hashindex capacity (* 8 #1mib) create #t
-	    background #t]))
+  (knodb/ref (mkpath squad-loc "squad.index")
+	     #[type knoindex capacity (* 8 #1mib) create #t
+	       background #t]))
 
 (define nl-slots  '{words terms marks tuples})
 
 (define (make-combo-index prefix)
   (make-aggregate-index
    {(for-choices (slotid nl-slots)
-       (db/ref (mkpath squad-loc (glom prefix "_" (downcase slotid) ".index"))
-	       `#[type hashindex keyslot ,slotid capacity (* 12 #1mib) create #t]))
-    (db/ref (mkpath squad-loc (glom prefix "_etc"  ".index"))
-	    `#[type hashindex capacity #1mib create #t])}
+       (knodb/ref (mkpath squad-loc (glom prefix "_" (downcase slotid) ".index"))
+		  `#[type knoindex keyslot ,slotid capacity (* 12 #1mib) create #t]))
+    (knodb/ref (mkpath squad-loc (glom prefix "_etc"  ".index"))
+	       `#[type knoindex capacity #1mib create #t])}
    #[register #t]))
 
 (define-init questions.index (make-combo-index "questions"))

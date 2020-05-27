@@ -1,3 +1,28 @@
+#!/usr/bin/env knox
+;;; -*- Mode: Scheme; Character-encoding: utf-8; -*-
+
+;;; SQUAD is about 20MB of text
+
+(define (text-length f) (length (get f 'text)))
+(define (text-count f) (length (segment (get f 'text))))
+
+(config! 'cachelevel 2)
+(config! 'tagger:dupstrings #t)
+(config! 'lexicon:prefhash #t)
+(config! 'lexicon:static #t)
+(config! 'log:elapsed #t)
+(config! 'log:threadid #t)
+
+(use-module '{logger varconfig logctl ellipsize optimize})
+
+(define-init %loglevel (config 'loglevel %notice%))
+
+(use-module '{texttools webtools ofsm brico})
+(use-module '{ofsm/graph ofsm/graph/features})
+(use-module '{squad})
+(use-module '{engine fifo})
+(use-module '{knodb})
+
 ;;;; NLP and indexing
 
 (define (thread-tagger)
@@ -25,7 +50,7 @@
 		    'linkup))
 	   (doseq (word (get passage 'linkup))
 	     (store! word '{passage sentence} passage))
-	   (linkup/index! passage questions.index default-linkup-opts stats))
+	   (graph/index! passage linked default-linkup-opts questions.index stats))
 	  (else
 	   (store! passage 'sentences
 		   (->vector
@@ -51,13 +76,13 @@
 			   'tag (get match 'tag) 'ishead (get match 'ishead)))))))))
     stats))
 
-(define (make-sentence sentence passage q.pool q.index
+(define (make-sentence parse passage q.pool q.index
 		       sentences.index
 		       passages.index
 		       stats
 		       (i #f))
   (let* ((text (stringout 
-		 (doseq (frame sentence i)
+		 (doseq (frame parse i)
 		   (if (test frame 'source)
 		       (printout (get frame 'source))
 		       (printout (if (> i 0) " ") (get frame 'term) )))))
@@ -65,15 +90,21 @@
 		  'type 'sentence '%id (ellipsize text)
 		  'passage passage
 		  'text text
-		  'linkup sentence
+		  'linkup parse
 		  'sentence_no (tryif i i))))
-    (add! (elts sentence) 'sentence frame)
-    (add! (elts sentence) 'passage passage)
+    (add! (elts parse) 'sentence frame)
+    (add! (elts parse) 'passage passage)
     (index-frame q.index frame '{type passage})
-    (linkup/index! frame 
-		   (qc (cons sentences.index frame)
-		       (cons passages.index passage))
-		 default-linkup-opts
-		 stats)
+    (graph/index! frame parse default-linkup-opts sentences.index)
+    (graph/index! passage parse default-linkup-opts passages.index)
     frame))
 
+(define (read-texts (opts #f))
+  (engine/run parse-text (?? 'type '{question passage})
+	      (opt+ opts
+		    `#[batchsize 1 logfreq 30 checkfreq 15
+		       counters {words sentences terms marks}
+		       logrates {words sentences}
+		       checktests ,(engine/delta 'items 5000)
+		       checkpoint ,{squad.pool squad.index questions.index
+				    passages.index sentences.index}])))

@@ -34,7 +34,7 @@
 	     #[type knoindex capacity (* 8 #1mib) create #t
 	       background #t]))
 
-(define nl-slots  '{words terms marks tuples})
+(define nl-slots  '{words terms marks roles})
 
 (define (make-combo-index prefix)
   (make-aggregate-index
@@ -85,13 +85,13 @@
       (nl/search q opts index)
       (nl/search q (opt+ opts 
 			 'filter `#[index ,squad.index category (get q 'category)]
-			 'features- '{marks tuples})
+			 'features- '{marks roles tuples})
 		 index)))
 
 (define (squad/text/search q (opts #f) (index))
   (default! index (opts->index opts))
   (when (getopt opts 'graph) (set! q (linkup/graph q)))
-  (nl/search q `(opts+ opts 'exclude {marks tuples}) index))
+  (nl/search q `(opts+ opts 'exclude {marks roles tuples}) index))
 
 ;;; Getting stuff
 

@@ -15,11 +15,14 @@
 (module-export! '{squad/search squad/text/search})
 (module-export! '{squad/questions squad/passages squad/sentences})
 
+(define base-loc (dirname (get-component "base/squad.pool")))
+(varconfig! squad:base base-loc)
+
 (define squad-loc (dirname (get-component "data/squad.pool")))
 (varconfig! squad:loc squad-loc)
 
 (define-init squad.pool
-  (pool/ref (mkpath squad-loc "squad.pool")
+  (pool/ref (mkpath base-loc "squad.pool")
 	    #[type knopool base @5COAD/0 capacity #1mib
 	      create #t]))
 (define-init squad.linkups
@@ -30,7 +33,7 @@
 (adjunct! squad.pool 'linkup squad.linkups)
 
 (define-init squad.index
-  (knodb/ref (mkpath squad-loc "squad.index")
+  (knodb/ref (mkpath base-loc "squad.index")
 	     #[type knoindex capacity (* 8 #1mib) create #t
 	       background #t]))
 

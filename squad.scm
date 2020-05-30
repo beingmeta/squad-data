@@ -4,6 +4,7 @@
 
 (use-module '{texttools webtools})
 (use-module '{logger varconfig})
+(use-module '{ofsm/graph ofsm/graph/features ofsm/graph/search})
 (use-module '{knodb})
 
 (define-init %loglevel %notice%)
@@ -11,6 +12,7 @@
 (module-export! '{squad.pool squad.index
 		  questions.index 
 		  passages.index
+		  sentences.pool
 		  sentences.index})
 (module-export! '{squad/search squad/text/search})
 (module-export! '{squad/questions squad/passages squad/sentences})
@@ -23,12 +25,17 @@
 
 (define-init squad.pool
   (pool/ref (mkpath base-loc "squad.pool")
-	    #[type knopool base @5COAD/0 capacity #1mib
+	    #[type knopool base @5C0AD/0 capacity #1mib
 	      create #t]))
 (define-init squad.linkups
   (pool/ref (mkpath squad-loc "linkups.pool")
 	    #[adjunct linkup
-	      type knopool base @5COAD/0 capacity #1mib
+	      type knopool base @5C0AD/0 capacity #1mib
+	      create #t]))
+(define-init squad.sentences.adjunct
+  (pool/ref (mkpath squad-loc "sentences.adjunct.pool")
+	    #[adjunct sentences
+	      type knopool base @5C0AD/0 capacity #1mib
 	      create #t]))
 (adjunct! squad.pool 'linkup squad.linkups)
 
@@ -37,7 +44,12 @@
 	     #[type knoindex capacity (* 8 #1mib) create #t
 	       background #t]))
 
-(define nl-slots  '{words terms marks roles})
+(define-init sentences.pool
+  (pool/ref (mkpath squad-loc "sentences.pool")
+	    #[type knopool base @5C0AD5/0 capacity #1mib
+	      create #t]))
+
+(define nl-slots  '{terms marks roles quals})
 
 (define (make-combo-index prefix)
   (make-aggregate-index
@@ -75,26 +87,31 @@
 
 (define (squad/search q (opts #f) (index))
   (default! index (opts->index opts))
-  (when (getopt opts 'graph) (set! q (linkup/graph q)))
+  (cond ((string? q) (linkup q opts))
+	((oid? q) (try (get q 'linkup)
+		       (linkup (get q 'text) opts))))
   (if (and (getopt opts 'intopic #f) (test q 'category))
-      (nl/search q opts index)
-      (nl/search q (opt+ opts 'filter `#[index ,squad.index category (get q 'category)])
-		 index)))
+      (graph/search q opts index)
+      (graph/search q (opt+ opts 'filter `#[index ,squad.index category (get q 'category)])
+		    index)))
 
 (define (squad/text/search q (opts #f) (index))
   (default! index (opts->index opts))
-  (when (getopt opts 'graph) (set! q (linkup/graph q)))
+  (cond ((string? q) (linkup q opts))
+	((oid? q) (try (get q 'linkup)
+		       (linkup (get q 'text) opts))))
   (if (and (getopt opts 'intopic #f) (test q 'category))
-      (nl/search q opts index)
-      (nl/search q (opt+ opts 
-			 'filter `#[index ,squad.index category (get q 'category)]
-			 'features- '{marks roles tuples})
-		 index)))
+      (graph/search q opts index)
+      (graph/search q (opt+ opts 
+			  'filter `#[index ,squad.index category (get q 'category)]
+			  'features- '{marks roles tuples})
+		    index)))
 
 (define (squad/text/search q (opts #f) (index))
   (default! index (opts->index opts))
-  (when (getopt opts 'graph) (set! q (linkup/graph q)))
-  (nl/search q `(opts+ opts 'exclude {marks roles tuples}) index))
+  (cond ((string? q) (linkup q opts))
+	((oid? q) (try (get q 'linkup) (linkup (get q 'text) opts))))
+  (graph/search q `(opts+ opts 'exclude {marks roles tuples}) index))
 
 ;;; Getting stuff
 

@@ -1,10 +1,10 @@
 ;;; -*- Mode: Scheme; Character-encoding: utf-8; -*-
 
-(in-module 'chopper/squad/misses)
+(in-module 'squad/misses)
 
 (use-module '{logger varconfig stringfmts})
-(use-module '{chopper/graph chopper/features chopper/search})
-(use-module '{chopper/squad})
+(use-module '{ofsm/graph ofsm/graph/features ofsm/graph/search})
+(use-module '{squad})
 
 (define-init %loglevel %notice%)
 
@@ -18,7 +18,7 @@
 		   (opts+ opts 'filter `#[index ,squad.index 
 					  category ,(get question 'category)])
 		   opts))
-	 (result (nl/search question opts passages.index))
+	 (result (graph/search question opts passages.index))
 	 (misses (difference (get result 'matches) (get question 'passage)))
 	 (matched (overlaps? (get question 'passage) (get result 'matches)))
 	 (getrank (getopt opts 'getrank default-getrank))
@@ -42,7 +42,7 @@
 	'scores (tryif (or (getopt opts 'getscores) (not batch))
 		  (get result 'scores))
 	'status (get-status result (get question 'passage))
-	'rank (tryif getrank (nl/search/rank result (get question 'passage)))
+	'rank (tryif getrank (graph/search/rank result (get question 'passage)))
 	'using (get result 'using)
 	'bestscore (get result 'bestscore)
 	'thresh (getopt result 'thresh {})))))

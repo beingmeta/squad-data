@@ -8,8 +8,6 @@
 
 (config! 'cachelevel 2)
 (config! 'tagger:dupstrings #t)
-(config! 'lexicon:prefhash #t)
-(config! 'lexicon:static #t)
 (config! 'log:elapsed #t)
 (config! 'log:threadid #t)
 
@@ -86,7 +84,7 @@
 		   (if (test frame 'source)
 		       (printout (get frame 'source))
 		       (printout (if (> i 0) " ") (get frame 'term) )))))
-	 (frame (frame-create squad.pool
+	 (frame (frame-create sentences.pool
 		  'type 'sentence '%id (ellipsize text)
 		  'passage passage
 		  'text text
@@ -95,6 +93,7 @@
     (add! (elts parse) 'sentence frame)
     (add! (elts parse) 'passage passage)
     (index-frame q.index frame '{type passage})
+    (index-frame passages.index frame '{type passage})
     (graph/index! frame parse default-linkup-opts sentences.index)
     (graph/index! passage parse default-linkup-opts passages.index)
     frame))
@@ -108,3 +107,4 @@
 		       checktests ,(engine/delta 'items 5000)
 		       checkpoint ,{squad.pool squad.index questions.index
 				    passages.index sentences.index}])))
+(define main read-texts)

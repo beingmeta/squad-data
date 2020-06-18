@@ -10,10 +10,8 @@
 (define-init %loglevel %notice%)
 
 (module-export! '{squad.pool squad.index
-		  questions.index 
-		  passages.index
-		  sentences.pool
-		  sentences.index})
+		  sentences.pool sentences.index
+		  questions.nlp passages.nlp sentences.nlp})
 (module-export! '{squad/search squad/text/search})
 (module-export! '{squad/questions squad/passages squad/sentences})
 
@@ -32,12 +30,13 @@
 	    #[adjunct linkup
 	      type knopool base @5C0AD/0 capacity #1mib
 	      create #t]))
-(define-init squad.sentences.adjunct
+(adjunct! squad.pool 'linkup squad.linkups)
+(define-init squad.sentences
   (pool/ref (mkpath squad-loc "sentences.adjunct.pool")
 	    #[adjunct sentences
 	      type knopool base @5C0AD/0 capacity #1mib
 	      create #t]))
-(adjunct! squad.pool 'linkup squad.linkups)
+(adjunct! squad.pool 'sentences squad.sentences)
 
 (define-init squad.index
   (knodb/ref (mkpath base-loc "squad.index")
@@ -48,42 +47,47 @@
   (pool/ref (mkpath squad-loc "sentences.pool")
 	    #[type knopool base @5C0AD5/0 capacity #1mib
 	      create #t]))
+(define-init sentences.index
+  (knodb/ref (mkpath squad-loc "parses.index")
+	     #[type knoindex capacity (* 8 #1mib) create #t
+	       background #t]))
 
-(define nl-slots  '{terms marks roles quals})
+(define-init sentences.linkups
+  (pool/ref (mkpath squad-loc "sentences.linkups.pool")
+	    #[adjunct linkup
+	      type knopool base @5C0AD5/0 capacity #1mib
+	      create #t]))
+(adjunct! sentences.pool 'linkup sentences.linkups)
 
-(define (make-combo-index prefix)
-  (make-aggregate-index
-   {(for-choices (slotid nl-slots)
-       (knodb/ref (mkpath squad-loc (glom prefix "_" (downcase slotid) ".index"))
-		  `#[type knoindex keyslot ,slotid capacity (* 12 #1mib) create #t]))
-    (knodb/ref (mkpath squad-loc (glom prefix "_etc"  ".index"))
-	       `#[type knoindex capacity #1mib create #t])}
-   #[register #t]))
+(define nl-slots '{terms marks roles phrases quals})
 
-(define-init questions.index (make-combo-index "questions"))
-(indexctl {questions.index (indexctl questions.index 'partitions)}
+(define (make-nlp-index prefix)
+  (graph-index (mkpath squad-loc prefix) nl-slots))
+
+(define-init questions.nlp (make-nlp-index "questions"))
+(indexctl {questions.nlp (indexctl questions.nlp 'partitions)}
 	  'props 'ndocs (choice-size (?? 'type 'question)))
 
-(define-init passages.index (make-combo-index "passages"))
-(indexctl {passages.index (indexctl passages.index 'partitions)}
+(define-init passages.nlp (make-nlp-index "passages"))
+(indexctl {passages.nlp (indexctl passages.nlp 'partitions)}
 	  'props 'ndocs (choice-size (?? 'type 'passage)))
 
-(define-init sentences.index (make-combo-index "sentences"))
-(indexctl {(indexctl sentences.index 'partitions) sentences.index}
+(define-init sentences.nlp (make-nlp-index "sentences"))
+(indexctl {(indexctl sentences.nlp 'partitions) sentences.nlp}
 	  'props 'ndocs (choice-size (?? 'type 'sentence)))
 
 (define name->index
-  `#[sentences ,sentences.index
-     passages ,passages.index
-     questions ,questions.index])
+  `#[sentences ,sentences.nlp
+     passages ,passages.nlp
+     questions ,questions.nlp])
 
-(define (opts->index opts (dflt passages.index) (index))
+(define (opts->index opts (dflt passages.nlp) (index))
   (set! index (getopt opts 'index (getopt opts 'domain)))
   (when (symbol? index)
     (set! index (try (get name->index index) 
 		     (get name->index 'default)
 		     #f)))
-  (or index passages.index))
+  (or index passages.nlp))
 
 (define (squad/search q (opts #f) (index))
   (default! index (opts->index opts))

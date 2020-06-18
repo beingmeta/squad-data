@@ -15,12 +15,15 @@
 
 (define (squad/misses question (opts #f) (extra #f))
   (let* ((opts (if (getopt opts 'intopic)
-		   (opts+ opts 'filter `#[index ,squad.index 
-					  category ,(get question 'category)])
+		   (opts+ opts 'filter
+		     `#[index ,squad.index 
+			category ,(get question 'category)])
 		   opts))
-	 (result (graph/search question opts passages.index))
-	 (misses (difference (get result 'matches) (get question 'passage)))
-	 (matched (overlaps? (get question 'passage) (get result 'matches)))
+	 (result (graph/search question opts passages.nlp))
+	 (misses (difference (get result 'matches)
+			     (get question 'passage)))
+	 (matched (overlaps? (get question 'passage)
+			     (get result 'matches)))
 	 (getrank (getopt opts 'getrank default-getrank))
 	 (batch (getopt opts 'batch)))
     (when extra 
@@ -42,7 +45,8 @@
 	'scores (tryif (or (getopt opts 'getscores) (not batch))
 		  (get result 'scores))
 	'status (get-status result (get question 'passage))
-	'rank (tryif getrank (graph/search/rank result (get question 'passage)))
+	'rank (tryif getrank 
+		(graph/search/rank result (get question 'passage)))
 	'using (get result 'using)
 	'bestscore (get result 'bestscore)
 	'thresh (getopt result 'thresh {})))))
@@ -69,13 +73,16 @@
 (define (squad/missfn miss stats)
   (table-increment! stats 'matched (get miss 'count))
   (table-increment! stats 'errors (choice-size (get miss 'misses)))
-  (when (fail? (get miss 'matches)) (table-increment! stats 'nomatches))
+  (when (fail? (get miss 'matches))
+    (table-increment! stats 'nomatches))
   (if (get miss 'failed)
       (table-increment! stats 'failed)
       (table-increment! stats 'found))
   (hashset-add! (get stats 'missed) (get miss 'question))
-  (do-choices (status (get miss 'status)) (table-increment! stats status))
-  (when (and (test miss 'rank) (get miss 'rank) (number? (get miss 'rank)))
+  (do-choices (status (get miss 'status))
+    (table-increment! stats status))
+  (when (and (test miss 'rank) (get miss 'rank)
+	     (number? (get miss 'rank)))
     (table-increment! stats 'rank (get miss 'rank))
     (table-increment! (get stats 'ranks) (get miss 'rank))))
 

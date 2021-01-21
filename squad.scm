@@ -4,7 +4,7 @@
 
 (use-module '{texttools webtools})
 (use-module '{logger varconfig})
-(use-module '{ofsm/graph ofsm/graph/features ofsm/graph/search})
+(use-module '{ofsm/graph ofsm/graph/features ofsm/graph/index ofsm/graph/search})
 (use-module '{knodb})
 
 (define-init %loglevel %notice%)
@@ -18,7 +18,7 @@
 (define base-loc (dirname (get-component "base/squad.pool")))
 (varconfig! squad:base base-loc)
 
-(define squad-loc (dirname (get-component "data/squad.pool")))
+(define squad-loc (dirname (get-component "data/linkups.pool")))
 (varconfig! squad:loc squad-loc)
 
 (define-init squad.pool
@@ -31,6 +31,13 @@
 	      type knopool base @5C0AD/0 capacity #1mib
 	      create #t]))
 (adjunct! squad.pool 'linkup squad.linkups)
+
+(define-init squad.index
+  (knodb/ref (mkpath base-loc "squad.index")
+	     #[type knoindex capacity (* 8 #1mib) create #t
+	       background #t]))
+
+;;; For saving passage -> sentences mapping
 (define-init squad.sentences
   (pool/ref (mkpath squad-loc "sentences.adjunct.pool")
 	    #[adjunct sentences
@@ -38,56 +45,41 @@
 	      create #t]))
 (adjunct! squad.pool 'sentences squad.sentences)
 
-(define-init squad.index
-  (knodb/ref (mkpath base-loc "squad.index")
-	     #[type knoindex capacity (* 8 #1mib) create #t
-	       background #t]))
-
-(define-init sentences.pool
-  (pool/ref (mkpath squad-loc "sentences.pool")
-	    #[type knopool base @5C0AD5/0 capacity #1mib
-	      create #t]))
-(define-init sentences.index
-  (knodb/ref (mkpath squad-loc "parses.index")
-	     #[type knoindex capacity (* 8 #1mib) create #t
-	       background #t]))
-
-(define-init sentences.linkups
-  (pool/ref (mkpath squad-loc "sentences.linkups.pool")
-	    #[adjunct linkup
-	      type knopool base @5C0AD5/0 capacity #1mib
-	      create #t]))
-(adjunct! sentences.pool 'linkup sentences.linkups)
+;; (define-init sentences.linkups
+;;   (pool/ref (mkpath squad-loc "sentences.linkups.pool")
+;; 	    #[adjunct linkup
+;; 	      type knopool base @5C0AD5/0 capacity #1mib
+;; 	      create #t]))
+;; (adjunct! sentences.pool 'linkup sentences.linkups)
 
 (define nl-slots '{terms marks roles phrases quals})
 
-(define (make-nlp-index prefix)
-  (graph-index (mkpath squad-loc prefix) nl-slots))
+(define (make-nlp-index prefix (opts #f))
+  (graph-db (mkpath squad-loc prefix) nl-slots (opt+ opts 'etc #t 'context #t)))
 
-(define-init questions.nlp (make-nlp-index "questions"))
-(indexctl {questions.nlp (indexctl questions.nlp 'partitions)}
-	  'props 'ndocs (choice-size (?? 'type 'question)))
+(define-init questions.nlp (make-nlp-index "questions" #[sentences #f]))
+(let ((ndocs (choice-size (?? 'type 'question))))
+  (indexctl {questions.nlp (indexctl questions.nlp 'partitions)}
+	    'props 'ndocs ndocs))
 
-(define-init passages.nlp (make-nlp-index "passages"))
-(indexctl {passages.nlp (indexctl passages.nlp 'partitions)}
-	  'props 'ndocs (choice-size (?? 'type 'passage)))
-
-(define-init sentences.nlp (make-nlp-index "sentences"))
-(indexctl {(indexctl sentences.nlp 'partitions) sentences.nlp}
-	  'props 'ndocs (choice-size (?? 'type 'sentence)))
+(define-init sentences.nlp 
+  (make-nlp-index "sentences"
+		  #[sentences #[adjuncts #[linkups #[type kpool]]]]))
+(let ((index (pool/getindex sentences.nlp)))
+  (indexctl {index (indexctl index 'partitions)}
+	    'props 'ndocs (choice-size (find-frames index 'type 'sentence))))
 
 (define name->index
   `#[sentences ,sentences.nlp
-     passages ,passages.nlp
      questions ,questions.nlp])
 
-(define (opts->index opts (dflt passages.nlp) (index))
+(define (opts->index opts (dflt sentences.nlp) (index))
   (set! index (getopt opts 'index (getopt opts 'domain)))
   (when (symbol? index)
     (set! index (try (get name->index index) 
 		     (get name->index 'default)
 		     #f)))
-  (or index passages.nlp))
+  (or index sentences.nlp))
 
 (define (squad/search q (opts #f) (index))
   (default! index (opts->index opts))
@@ -125,5 +117,3 @@
   (if n (pick-n (?? 'type 'passage) n) (?? 'type 'passage)))
 (define (squad/sentences (n #f))
   (if n (pick-n (?? 'type 'sentence) n) (?? 'type 'sentence)))
-
-

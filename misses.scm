@@ -2,7 +2,7 @@
 
 (in-module 'squad/misses)
 
-(use-module '{logger varconfig stringfmts})
+(use-module '{logger varconfig text/stringfmts})
 (use-module '{ofsm/graph ofsm/graph/features ofsm/graph/search})
 (use-module '{squad})
 
@@ -16,20 +16,19 @@
 (define (squad/misses question (opts #f) (extra #f))
   (let* ((opts (if (getopt opts 'intopic)
 		   (opts+ opts 'filter
-		     `#[index ,squad.index 
-			category ,(get question 'category)])
+		     `#[category ,(get question 'category)])
 		   opts))
-	 (result (graph/search question opts passages.nlp))
-	 (misses (difference (get result 'matches)
+	 (result (graph/search question opts sentences.nlp))
+	 (misses (difference (get (get result 'matches) 'passage)
 			     (get question 'passage)))
 	 (matched (overlaps? (get question 'passage)
-			     (get result 'matches)))
+			     (get (get result 'matches) 'passage)))
 	 (getrank (getopt opts 'getrank default-getrank))
 	 (batch (getopt opts 'batch)))
     (when extra 
       (store! extra 'using (get result 'using))
       (store! extra 'bestscore (get result 'bestscore)))
-    (tryif (or (exists? misses) (not matched))
+    (tryif (or (exists? misses) (not matched) (getopt opts 'info))
       ;; Ignore cases which don't have extraneous matches and have at
       ;; least the one correct match.
       (modify-frame
@@ -38,18 +37,24 @@
 	     expected ,(get question 'passage)
 	     matches ,(get result 'matches)
 	     failed ,(not matched)
-	     count  ,(get result 'count)
-	     total  ,(get result 'total)
+	     count  ,(search/get result 'matchcount)
+	     total  ,(search/get result 'nscored)
 	     misses ,misses]
 	'testid (getopt opts 'testid {})
 	'scores (tryif (or (getopt opts 'getscores) (not batch))
-		  (get result 'scores))
+		  result)
 	'status (get-status result (get question 'passage))
 	'rank (tryif getrank 
-		(graph/search/rank result (get question 'passage)))
+		(passage-rank result (get question 'passage)))
 	'using (get result 'using)
-	'bestscore (get result 'bestscore)
-	'thresh (getopt result 'thresh {})))))
+	'maxscore (search/get result 'maxscore)
+	'topscore (search/get result 'topscore)
+	'confidence (search/get result 'confidence)
+	'thresh (search/get result 'threshold)))))
+
+(define (passage-rank scores passage)
+  (position-if (lambda (sentence) (test sentence 'passage passage))
+	       (rsorted (pickoids (getkeys scores)) scores)))
 
 (define (get-status result answer)
   (choice (tryif (test result 'matches answer) 'success)

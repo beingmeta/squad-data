@@ -11,12 +11,12 @@
 (config! 'log:elapsed #t)
 (config! 'log:threadid #t)
 
-(use-module '{logger varconfig logctl ellipsize optimize})
+(use-module '{logger varconfig logctl text/ellipsize optimize})
 
 (define-init %loglevel (config 'loglevel %notice%))
 
 (use-module '{texttools webtools ofsm brico})
-(use-module '{ofsm/graph ofsm/graph/features ofsm/graph/optimized})
+(use-module '{ofsm/graph ofsm/graph/features ofsm/graph/index ofsm/graph/optimized})
 (use-module '{squad})
 (use-module '{engine fifo})
 (use-module '{knodb})
@@ -34,7 +34,10 @@
 	     ,(tryif (CONFIG 'USEALT #f) 'alt)}
      analyze {terms phrases marks roles quals}
      usealt (and (config 'USEALT #f) linkup/alt/soundalike)
-     ground ,(config 'tagger:ground)])
+     ground ,(config 'tagger:ground)
+     context-slotids category
+     saveparse linkup
+     savetext parsetext])
 
 (define (parse-text passage (stats (frame-create #f)))
   (let* ((tagger (thread-tagger))
@@ -49,18 +52,9 @@
 		    'linkup))
 	   (doseq (word (get passage 'linkup))
 	     (store! word '{passage sentence} passage))
-	   (graph/index! passage linked default-linkup-opts 
-			 questions.nlp stats))
+	   (graph/index! passage linked default-linkup-opts questions.nlp))
 	  (else
-	   (store! passage 'sentences
-		   (->vector
-		    (forseq (sentence linked i)
-		      (make-sentence sentence passage
-				     sentences.index
-				     sentences.nlp
-				     passages.nlp
-				     stats
-				     i))))
+	   (graph/index! passage linked default-linkup-opts sentences.nlp)
 	   (do-choices (question (get passage 'questions))
 	     (do-choices (answer (get question 'answers))
 	       (let ((match (linkup/getoff linked (get answer 'start))))
@@ -77,31 +71,6 @@
 			   'ishead (get match 'ishead)))))))))
     stats))
 
-(define (make-sentence parse passage
-		       q.index
-		       sentences.index
-		       passages.index
-		       stats
-		       (i #f))
-  (let* ((text (stringout 
-		 (doseq (frame parse i)
-		   (if (test frame 'source)
-		       (printout (get frame 'source))
-		       (printout (if (> i 0) " ")
-			 (get frame 'term))))))
-	 (frame (frame-create sentences.pool
-		  'type 'sentence '%id (ellipsize text)
-		  'passage passage
-		  'text text
-		  'linkup parse
-		  'sentence_no (tryif i i))))
-    (add! (elts parse) 'sentence frame)
-    (add! (elts parse) 'passage passage)
-    (index-frame sentences.index frame '{type passage})
-    (graph/index! frame parse default-linkup-opts sentences.nlp)
-    (graph/index! passage parse default-linkup-opts passages.nlp)
-    frame))
-
 (define (read-texts (opts #f))
   (engine/run parse-text (?? 'type '{question passage})
 	      (opt+ opts
@@ -109,9 +78,6 @@
 		       counters {words sentences terms marks}
 		       logrates {words sentences}
 		       checktests ,(engine/delta 'items 5000)
-		       checkpoint ,{squad.pool squad.index 
-				    sentences.pool sentences.index 
-				    questions.nlp
-				    passages.nlp 
-				    sentences.nlp}])))
+		       checkpoint ,{squad.pool squad.index questions.nlp
+				    sentences.nlp (knodb/getindexes sentences.nlp)}])))
 (define main read-texts)

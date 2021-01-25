@@ -36,6 +36,7 @@
      usealt (and (config 'USEALT #f) linkup/alt/soundalike)
      ground ,(config 'tagger:ground)
      context-slotids category
+     save-sentences sentences
      saveparse linkup
      savetext parsetext])
 
